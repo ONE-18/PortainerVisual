@@ -86,7 +86,7 @@ def generate_stacks_with_containers(containers_file, stacks_file, output_file):
             "Containers": stack_containers
         })
         
-    result = [{"Node": "N100", "Stacks": node_stacks}]
+    result = [{"Node": "N100", "VMs":[{"Name":"LXC_0","Stacks": node_stacks}]}]
 
     # Guardar el resultado en un archivo JSON
     with open(output_file, 'w') as f:
