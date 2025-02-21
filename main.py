@@ -63,19 +63,20 @@ def generate_stacks_with_containers(containers_file, stacks_file, output_file):
     node_stacks = []
 
     for stack_id, stack_name in stack_map.items():
+        
         # Filtrar los contenedores que pertenecen a este stack (usando Labels)
         stack_containers = [
             {
-                "Name": container['Names'][0].lstrip('/'),  # Nombre del contenedor
-                "Attributes": [
-                    {
-                        "IP": port.get('IP', 'N/A'),
-                        "PrivatePort": port.get('PrivatePort'),
-                        "PublicPort": port.get('PublicPort'),
-                        "Type": port.get('Type')
-                    }
-                    for port in container.get('Ports', [])
-                ]
+            "Name": f"c_{container['Names'][0].lstrip('/')}" if container['Names'][0].lstrip('/') == stack_name else container['Names'][0].lstrip('/'),  # Nombre del contenedor
+            "Attributes": [
+                {
+                "IP": port.get('IP', 'N/A'),
+                "PrivatePort": port.get('PrivatePort'),
+                "PublicPort": port.get('PublicPort'),
+                "Type": port.get('Type')
+                }
+                for port in container.get('Ports', [])
+            ]
             }
             for container in containers
             if container.get('Labels', {}).get('com.docker.compose.project') == stack_name
@@ -104,92 +105,110 @@ def generate_and_draw_graf(filename):
     
     for nodo in data:
         node_name = nodo["Name"]
-        G.add_node(node_name, label="Nodo")
+        G.add_node(node_name, label="Nodo", color="red")
 
         for vm in nodo["Attributes"]:
             vm_name = vm["Name"]
-            G.add_node(vm_name, label="VM")
+            G.add_node(vm_name, label="VM", color="blue")
             G.add_edge(node_name, vm_name)
 
             for stack in vm["Attributes"]:
                 stack_name = stack["Name"]
-                G.add_node(stack_name, label="Stack")
+                G.add_node(stack_name, label="Stack", color="green")
                 G.add_edge(vm_name, stack_name)
 
                 for container in stack["Attributes"]:
                     container_name = "c_"+container["Name"]
-                    G.add_node(container_name, label="Contenedor")
+                    G.add_node(container_name, label="Contenedor", color="yellow")
                     G.add_edge(stack_name, container_name)
         
         # Dibujar el grafo
         plt.figure(figsize=(12, 8))
         pos = nx.spring_layout(G)
         labels = {node: node for node in G.nodes()}
-        nx.draw(G, pos, with_labels=True, labels=labels, node_size=2000, node_color="lightblue", edge_color="gray", font_size=10)
+        colors = [G.nodes[node]['color'] for node in G.nodes()]
+        nx.draw(G, pos, with_labels=True, labels=labels, node_size=2000, node_color=colors, edge_color="gray", font_size=10)
         plt.show()
-        
-def build_graph(data, graph=None, parent=None):
-    if graph is None:
-        graph = nx.DiGraph()
-    
-    if isinstance(data, list):
-        for item in data:
-            build_graph(item, graph)
-    elif isinstance(data, dict):
-        node_name = data.get("Name", "Unknown")
-        attributes = data.get("Attributes", [])
-        attr_text = ", ".join([f"{k}: {v}" for attr in attributes for k, v in attr.items() if isinstance(attr, dict)])
-        graph.add_node(node_name, label=node_name, title=attr_text)
-        
-        if parent:
-            graph.add_edge(parent, node_name)
-        
-        for attr in attributes:
-            if isinstance(attr, dict) and "Name" in attr:
-                build_graph(attr, graph, node_name)
-    
-    return graph
 
-def visualize_json(json_data):
-    graph = build_graph(json_data)
+def visualize_json(filename):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+        
     net = Network(notebook=True, directed=True)
     
-    for node, data in graph.nodes(data=True):
-        net.add_node(node, label=data.get("label", node), title=data.get("title", ""))
+    def add_nodes_edges(data, parent=None):
+        if isinstance(data, list):
+            for item in data:
+                add_nodes_edges(item, parent)
+        elif isinstance(data, dict):
+            node_name = data.get("Name", "Unknown")
+            attributes = data.get("Attributes", [])
+            attr_text = ", ".join([f"{k}: {v}" for attr in attributes for k, v in attr.items() if isinstance(attr, dict)])
+            
+            color = "red" if parent is None else "blue" if "N100" in parent else "green" if "LXC" in parent else "yellow"
+            net.add_node(node_name, label=node_name, title=attr_text, color=color)
+            
+            if parent:
+                net.add_edge(parent, node_name)
+            
+            for attr in attributes:
+                if isinstance(attr, dict) and "Name" in attr:
+                    add_nodes_edges(attr, node_name)
     
-    for source, target in graph.edges():
-        net.add_edge(source, target)
+    add_nodes_edges(data)
     
     net.show("graph.html")
 
+    print("El grafo ha sido guardado como 'graph.html'. Ábrelo en tu navegador.")
+
+def get_ports(filename):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    
+    ret = ""
+    
+    for nodo in data:
+        for vm in nodo["Attributes"]:
+            for stack in vm["Attributes"]:
+                for container in stack["Attributes"]:
+                    ports = [(attr['PrivatePort'], attr['PublicPort']) for attr in container["Attributes"] if 'PrivatePort' in attr and 'PublicPort' in attr]
+                    # print(f"Contenedor: {container['Name']}, Pares de puertos: {ports}")
+                    if ports != []:
+                        ret += f"{container['Name']}: {ports}\n"
+
+    with open('ports.txt', 'w') as f:
+        f.write(ret)
+
+
 def main():
     try:
-        # Paso 1: Obtener la lista de stacks
-        print("Obteniendo la lista de stacks...")
-        stacks = obtener_stacks()
+        # # Paso 1: Obtener la lista de stacks
+        # print("Obteniendo la lista de stacks...")
+        # stacks = obtener_stacks()
 
-        if not stacks:
-            print("No se encontraron stacks en Portainer.")
-            return
-        else:
-            guardar_json("stacks.json", stacks)
+        # if not stacks:
+        #     print("No se encontraron stacks en Portainer.")
+        #     return
+        # else:
+        #     guardar_json("stacks.json", stacks)
 
-        # Paso 2: Obtener la lista de contenedores
-        print("Obteniendo la lista de contenedores...")
-        containers = obtener_contenedores()
+        # # Paso 2: Obtener la lista de contenedores
+        # print("Obteniendo la lista de contenedores...")
+        # containers = obtener_contenedores()
         
-        if not containers:
-            print("No se encontraron contenedores en Portainer.")
-            return
-        else:
-            guardar_json("containers.json", containers)
+        # if not containers:
+        #     print("No se encontraron contenedores en Portainer.")
+        #     return
+        # else:
+        #     guardar_json("containers.json", containers)
         
-        generate_stacks_with_containers('containers.json', 'stacks.json', 'stacks_with_containers.json')
+        # generate_stacks_with_containers('containers.json', 'stacks.json', 'stacks_with_containers.json')
 
-        # generate_and_draw_graf('stacks_with_containers.json')
+        # # generate_and_draw_graf('stacks_with_containers.json')
         
-        visualize_json(stacks)
-        print("El grafo ha sido guardado como 'graph.html'. Ábrelo en tu navegador.")
+        # visualize_json('stacks_with_containers.json')
+
+        get_ports('stacks_with_containers.json')
 
     except requests.exceptions.RequestException as e:
         print(f"Error al comunicarse con la API de Portainer: {e}")

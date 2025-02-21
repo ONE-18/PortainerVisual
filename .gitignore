@@ -1,3 +1,6 @@
 /.env
 *.json
 /Figure_1.png
+/lib
+/graph.html
+/ports.txt
