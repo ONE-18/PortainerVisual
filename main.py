@@ -182,31 +182,31 @@ def get_ports(filename):
 
 def main():
     try:
-        # # Paso 1: Obtener la lista de stacks
-        # print("Obteniendo la lista de stacks...")
-        # stacks = obtener_stacks()
+        # Paso 1: Obtener la lista de stacks
+        print("Obteniendo la lista de stacks...")
+        stacks = obtener_stacks()
 
-        # if not stacks:
-        #     print("No se encontraron stacks en Portainer.")
-        #     return
-        # else:
-        #     guardar_json("stacks.json", stacks)
+        if not stacks:
+            print("No se encontraron stacks en Portainer.")
+            return
+        else:
+            guardar_json("stacks.json", stacks)
 
-        # # Paso 2: Obtener la lista de contenedores
-        # print("Obteniendo la lista de contenedores...")
-        # containers = obtener_contenedores()
+        # Paso 2: Obtener la lista de contenedores
+        print("Obteniendo la lista de contenedores...")
+        containers = obtener_contenedores()
         
-        # if not containers:
-        #     print("No se encontraron contenedores en Portainer.")
-        #     return
-        # else:
-        #     guardar_json("containers.json", containers)
+        if not containers:
+            print("No se encontraron contenedores en Portainer.")
+            return
+        else:
+            guardar_json("containers.json", containers)
         
-        # generate_stacks_with_containers('containers.json', 'stacks.json', 'stacks_with_containers.json')
+        generate_stacks_with_containers('containers.json', 'stacks.json', 'stacks_with_containers.json')
 
-        # # generate_and_draw_graf('stacks_with_containers.json')
+        # generate_and_draw_graf('stacks_with_containers.json')
         
-        # visualize_json('stacks_with_containers.json')
+        visualize_json('stacks_with_containers.json')
 
         get_ports('stacks_with_containers.json')
 
