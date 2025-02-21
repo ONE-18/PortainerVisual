@@ -5,6 +5,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
+from pyvis.network import Network
 
 load_dotenv()
 
@@ -65,8 +66,8 @@ def generate_stacks_with_containers(containers_file, stacks_file, output_file):
         # Filtrar los contenedores que pertenecen a este stack (usando Labels)
         stack_containers = [
             {
-                "ContainerName": container['Names'][0].lstrip('/'),  # Nombre del contenedor
-                "Ports": [
+                "Name": container['Names'][0].lstrip('/'),  # Nombre del contenedor
+                "Attributes": [
                     {
                         "IP": port.get('IP', 'N/A'),
                         "PrivatePort": port.get('PrivatePort'),
@@ -82,11 +83,11 @@ def generate_stacks_with_containers(containers_file, stacks_file, output_file):
 
         # Agregar la información del stack al resultado
         node_stacks.append({
-            "StackName": stack_name,
-            "Containers": stack_containers
+            "Name": stack_name,
+            "Attributes": stack_containers
         })
         
-    result = [{"Node": "N100", "VMs":[{"Name":"LXC_0","Stacks": node_stacks}]}]
+    result = [{"Name": "N100", "Attributes":[{"Name":"LXC_0","Attributes": node_stacks}]}]
 
     # Guardar el resultado en un archivo JSON
     with open(output_file, 'w') as f:
@@ -100,27 +101,66 @@ def generate_and_draw_graf(filename):
         data = json.load(f)
 
     G = nx.Graph()
-
+    
     for nodo in data:
-        node_name = nodo["Node"]
+        node_name = nodo["Name"]
         G.add_node(node_name, label="Nodo")
 
-        for stack in nodo["Stacks"]:
-            stack_name = stack["StackName"]
-            G.add_node(stack_name, label="Stack")
-            G.add_edge(node_name, stack_name)
+        for vm in nodo["Attributes"]:
+            vm_name = vm["Name"]
+            G.add_node(vm_name, label="VM")
+            G.add_edge(node_name, vm_name)
 
-            for container in stack["Containers"]:
-                container_name = "c_"+container["ContainerName"]
-                G.add_node(container_name, label="Contenedor")
-                G.add_edge(stack_name, container_name)
+            for stack in vm["Attributes"]:
+                stack_name = stack["Name"]
+                G.add_node(stack_name, label="Stack")
+                G.add_edge(vm_name, stack_name)
+
+                for container in stack["Attributes"]:
+                    container_name = "c_"+container["Name"]
+                    G.add_node(container_name, label="Contenedor")
+                    G.add_edge(stack_name, container_name)
+        
+        # Dibujar el grafo
+        plt.figure(figsize=(12, 8))
+        pos = nx.spring_layout(G)
+        labels = {node: node for node in G.nodes()}
+        nx.draw(G, pos, with_labels=True, labels=labels, node_size=2000, node_color="lightblue", edge_color="gray", font_size=10)
+        plt.show()
+        
+def build_graph(data, graph=None, parent=None):
+    if graph is None:
+        graph = nx.DiGraph()
     
-    # Dibujar el grafo
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(G)
-    labels = {node: node for node in G.nodes()}
-    nx.draw(G, pos, with_labels=True, labels=labels, node_size=2000, node_color="lightblue", edge_color="gray", font_size=10)
-    plt.show()
+    if isinstance(data, list):
+        for item in data:
+            build_graph(item, graph)
+    elif isinstance(data, dict):
+        node_name = data.get("Name", "Unknown")
+        attributes = data.get("Attributes", [])
+        attr_text = ", ".join([f"{k}: {v}" for attr in attributes for k, v in attr.items() if isinstance(attr, dict)])
+        graph.add_node(node_name, label=node_name, title=attr_text)
+        
+        if parent:
+            graph.add_edge(parent, node_name)
+        
+        for attr in attributes:
+            if isinstance(attr, dict) and "Name" in attr:
+                build_graph(attr, graph, node_name)
+    
+    return graph
+
+def visualize_json(json_data):
+    graph = build_graph(json_data)
+    net = Network(notebook=True, directed=True)
+    
+    for node, data in graph.nodes(data=True):
+        net.add_node(node, label=data.get("label", node), title=data.get("title", ""))
+    
+    for source, target in graph.edges():
+        net.add_edge(source, target)
+    
+    net.show("graph.html")
 
 def main():
     try:
@@ -146,7 +186,10 @@ def main():
         
         generate_stacks_with_containers('containers.json', 'stacks.json', 'stacks_with_containers.json')
 
-        generate_and_draw_graf('stacks_with_containers.json')
+        # generate_and_draw_graf('stacks_with_containers.json')
+        
+        visualize_json(stacks)
+        print("El grafo ha sido guardado como 'graph.html'. Ábrelo en tu navegador.")
 
     except requests.exceptions.RequestException as e:
         print(f"Error al comunicarse con la API de Portainer: {e}")
