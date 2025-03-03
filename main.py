@@ -4,6 +4,7 @@ import json
 import networkx as nx
 import matplotlib.pyplot as plt
 import os
+import ast
 from dotenv import load_dotenv
 from pyvis.network import Network
 
@@ -179,6 +180,37 @@ def get_ports(filename):
     with open('ports.txt', 'w') as f:
         f.write(ret)
 
+def generate_dashy(filename, ip_address="192.168.0.62"):
+    with open(filename, "r") as f:
+        lines = f.readlines()
+    
+    servicios = {}
+    for line in lines:
+        if line.strip():
+            nombre, puertos = line.split(": ")
+            puertos = ast.literal_eval(puertos.strip())
+            servicios[nombre] = puertos
+    
+    items = []
+    for servicio, puertos in servicios.items():
+        if puertos:
+            puerto = puertos[0][1]  # Primer puerto de la lista
+            if puerto is not None:
+                items.append({
+                    "title": f"{servicio}",
+                    "url": f"http://{ip_address}:{puerto}",
+                    "icon": "",
+                    "id" : f"{servicio}"
+                })
+    
+    with open("dashy.txt", "w") as f:
+        for item in items:
+            f.write(f"      - title: {item['title']}\n")
+            f.write(f"        url: {item['url']}\n")
+            f.write(f"        icon: {item['icon']}\n")
+            f.write(f"        id: {item['id']}\n\n")
+    
+    return items
 
 def main():
     try:
@@ -209,11 +241,12 @@ def main():
         visualize_json('stacks_with_containers.json')
 
         get_ports('stacks_with_containers.json')
-
     except requests.exceptions.RequestException as e:
         print(f"Error al comunicarse con la API de Portainer: {e}")
     except KeyError as e:
         print(f"Error al procesar la respuesta de la API: {e}")
+
+    print(generate_dashy('ports.txt'))
 
 if __name__ == "__main__":
     main()

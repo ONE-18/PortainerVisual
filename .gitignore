@@ -1,5 +1,6 @@
-/.env
 *.json
+*.txt
+/.env
 /Figure_1.png
 /lib
 /graph.html
